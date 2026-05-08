@@ -46,6 +46,8 @@ export function AppProvider({ children }) {
   const [messages, setMessages] = useState([]);
   const [recommendations, setRecommendations] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [sessionId, setSessionId] = useState(null);
+  const [apiError, setApiError] = useState('');
 
   const updateProfile = useCallback((key, value) => {
     setProfile((prev) => ({ ...prev, [key]: value }));
@@ -66,6 +68,10 @@ export function AppProvider({ children }) {
     setRecommendations,
     loading,
     setLoading,
+    sessionId,
+    setSessionId,
+    apiError,
+    setApiError,
     DIMENSIONS,
   };
 

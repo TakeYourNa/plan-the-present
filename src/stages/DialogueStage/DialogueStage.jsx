@@ -1,65 +1,37 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useApp } from '../../context/AppContext';
-import { chat } from '../../api/deepseek';
-import { buildDialogueSystemPrompt } from '../../prompts/systemDialogue';
-import { buildRecommendSystemPrompt } from '../../prompts/systemRecommend';
+import { createSession, sendMessage, getRecommendations } from '../../api/client';
 import ChatHistory from './ChatHistory';
 import ChatInput from './ChatInput';
 
 export default function DialogueStage() {
-  const { profile, messages, addMessage, setStage, setRecommendations, loading, setLoading } = useApp();
-  const systemPrompt = useRef(buildDialogueSystemPrompt(profile));
-  const dialogueStarted = useRef(false);
+  const {
+    profile, messages, addMessage, setStage, setRecommendations,
+    loading, setLoading, sessionId, setSessionId, apiError, setApiError
+  } = useApp();
   const [roundCount, setRoundCount] = useState(0);
-  const [apiError, setApiError] = useState('');
-
-  const generateRecommendations = useCallback(async () => {
-    setLoading(true);
-    setApiError('');
-    try {
-      const systemMsg = buildRecommendSystemPrompt(profile, messages);
-      const response = await chat(
-        [
-          { role: 'system', content: systemMsg },
-          { role: 'user', content: '请根据以上信息生成行动推荐。' },
-        ],
-        { temperature: 0.8, maxTokens: 3000 }
-      );
-
-      const jsonMatch = response.match(/```json\s*([\s\S]*?)\s*```/);
-      const jsonStr = jsonMatch ? jsonMatch[1] : response;
-      const data = JSON.parse(jsonStr);
-      setRecommendations(data);
-      setStage('recommend');
-    } catch (err) {
-      console.error('Recommend generation error:', err);
-      setApiError('生成推荐时出错，请再试一次。');
-    } finally {
-      setLoading(false);
-    }
-  }, [profile, messages, setLoading, setRecommendations, setStage]);
+  const [started, setStarted] = useState(false);
 
   const startDialogue = useCallback(async () => {
-    if (dialogueStarted.current) return;
-    dialogueStarted.current = true;
+    if (started) return;
+    setStarted(true);
     setLoading(true);
     setApiError('');
 
     try {
-      const response = await chat([
-        { role: 'system', content: systemPrompt.current },
-        { role: 'user', content: '你好，我准备好开始这段对话了。' },
-      ]);
-      addMessage('assistant', response);
+      const { sessionId: sid } = await createSession(profile);
+      setSessionId(sid);
+
+      const { reply } = await sendMessage(sid, profile, null);
+      addMessage('assistant', reply);
     } catch (err) {
       console.error('Dialogue start error:', err);
-      setApiError('连接 AI 失败，请检查 API Key 是否有效。' +
-        (err.message ? ` 错误信息: ${err.message}` : ''));
-      dialogueStarted.current = false;
+      setApiError('连接服务失败：' + (err.message || '未知错误'));
+      setStarted(false);
     } finally {
       setLoading(false);
     }
-  }, [addMessage, setLoading]);
+  }, [started, profile, addMessage, setLoading, setSessionId, setApiError]);
 
   const handleSend = useCallback(async (userInput) => {
     addMessage('user', userInput);
@@ -68,29 +40,37 @@ export default function DialogueStage() {
     setApiError('');
 
     try {
-      const allMessages = [
-        { role: 'system', content: systemPrompt.current },
-        ...messages.slice(-10),
-        { role: 'user', content: userInput },
-      ];
-
-      const response = await chat(allMessages);
-      addMessage('assistant', response);
+      const { reply } = await sendMessage(sessionId, profile, userInput);
+      addMessage('assistant', reply);
     } catch (err) {
-      console.error('Dialogue error:', err);
-      setApiError('发送失败，请重试。');
+      console.error('Send error:', err);
+      setApiError('发送失败：' + (err.message || '未知错误'));
     } finally {
       setLoading(false);
     }
-  }, [messages, addMessage, setLoading]);
+  }, [sessionId, profile, addMessage, setLoading, setApiError]);
+
+  const handleGetRecommendations = useCallback(async () => {
+    setLoading(true);
+    setApiError('');
+
+    try {
+      const data = await getRecommendations(sessionId, profile);
+      setRecommendations(data);
+      setStage('recommend');
+    } catch (err) {
+      console.error('Recommend error:', err);
+      setApiError('生成推荐失败：' + (err.message || '未知错误'));
+    } finally {
+      setLoading(false);
+    }
+  }, [sessionId, profile, setLoading, setRecommendations, setStage, setApiError]);
 
   return (
     <div className="stage dialogue-stage">
       <header className="stage-header dialogue-header">
         <h2>探索对话</h2>
-        <p className="dialogue-subtitle">
-          请以最诚实的方式回答每一个问题。
-        </p>
+        <p className="dialogue-subtitle">请以最诚实的方式回答每一个问题。</p>
       </header>
 
       <ChatHistory />
@@ -114,7 +94,7 @@ export default function DialogueStage() {
 
       {roundCount >= 4 && (
         <div className="dialogue-finish">
-          <button className="btn-text" onClick={generateRecommendations} disabled={loading}>
+          <button className="btn-text" onClick={handleGetRecommendations} disabled={loading}>
             我觉得聊得差不多了，看看我的建议 →
           </button>
         </div>
