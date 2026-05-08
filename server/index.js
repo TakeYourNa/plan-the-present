@@ -7,12 +7,24 @@ import chatRouter from './routes/chat.js';
 import recommendRouter from './routes/recommend.js';
 import sessionsRouter from './routes/sessions.js';
 
+// Prevent process crash from unhandled errors
+process.on('uncaughtException', (err) => {
+  console.error('UNCAUGHT EXCEPTION:', err);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('UNHANDLED REJECTION:', reason);
+});
+
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = process.env.PORT || 3001;
 
 app.use(cors());
 app.use(express.json());
+
+app.get('/api/health', (_req, res) => {
+  res.json({ status: 'ok', version: '52f11cd-fix', time: new Date().toISOString() });
+});
 
 app.use('/api/chat', chatRouter);
 app.use('/api/recommend', recommendRouter);
