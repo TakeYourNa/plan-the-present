@@ -11,6 +11,7 @@ export default function ProfileStage() {
     <div className="stage profile-stage">
       <header className="stage-header">
         <h1 className="app-title">规划当下</h1>
+        <p className="app-tagline">悟已往之不谏，知来者之可追</p>
         <p className="app-subtitle">
           你不是达成某个目标的工具。你是自己的目的。<br />
           在开始之前，请告诉我们关于你自己的一些事。

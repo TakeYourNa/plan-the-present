@@ -65,6 +65,15 @@ body {
   margin-bottom: 16px;
 }
 
+.app-tagline {
+  font-family: var(--font-serif);
+  font-size: 20px;
+  color: var(--accent);
+  letter-spacing: 4px;
+  margin-bottom: 12px;
+  font-style: italic;
+}
+
 .app-subtitle {
   font-family: var(--font-serif);
   font-size: 17px;
