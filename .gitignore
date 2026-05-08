@@ -26,6 +26,8 @@ dist-ssr
 # Database
 *.db
 *.db-journal
+*.db-shm
+*.db-wal
 
 # Environment
 .env
