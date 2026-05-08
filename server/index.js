@@ -27,6 +27,12 @@ app.get('/{*path}', (req, res) => {
   }
 });
 
+// Express error handler — MUST be defined to catch async errors in Express 5
+app.use((err, _req, res, _next) => {
+  console.error('Unhandled error:', err);
+  res.status(500).json({ error: '服务内部错误', detail: err.message || String(err) });
+});
+
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });

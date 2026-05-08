@@ -5,7 +5,7 @@ import { getMessages, saveRecommendations, updateSession } from '../db.js';
 
 const router = Router();
 
-router.post('/', async (req, res) => {
+router.post('/', async (req, res, next) => {
   const { sessionId, profile } = req.body;
 
   if (!sessionId || !profile) {
@@ -16,20 +16,42 @@ router.post('/', async (req, res) => {
     const history = getMessages(sessionId);
     const systemPrompt = buildRecommendSystemPrompt(profile, history);
 
-    const reply = await chat(
-      [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: '请根据以上信息生成行动推荐。' },
-      ],
-      { temperature: 0.8, maxTokens: 3000 }
-    );
+    let reply;
+    try {
+      reply = await chat(
+        [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: '请根据以上信息生成行动推荐。' },
+        ],
+        { temperature: 0.8, maxTokens: 3000 }
+      );
+    } catch (apiErr) {
+      console.error('DeepSeek API error:', apiErr.message);
+      return res.status(502).json({ error: 'AI服务暂时不可用', detail: apiErr.message });
+    }
 
-    const jsonMatch = reply.match(/```json\s*([\s\S]*?)\s*```/);
-    const jsonStr = jsonMatch ? jsonMatch[1] : reply;
-    const data = JSON.parse(jsonStr.trim());
+    if (!reply || typeof reply !== 'string') {
+      return res.status(500).json({ error: 'AI返回了空内容' });
+    }
 
-    saveRecommendations(sessionId, data);
-    updateSession(sessionId, { stage: 'recommend' });
+    let data;
+    try {
+      const jsonMatch = reply.match(/```json\s*([\s\S]*?)\s*```/);
+      const jsonStr = jsonMatch ? jsonMatch[1].trim() : reply.trim();
+      data = JSON.parse(jsonStr);
+    } catch (parseErr) {
+      console.error('JSON parse error:', parseErr.message);
+      console.error('Raw reply (first 500):', reply.substring(0, 500));
+      return res.status(500).json({ error: 'AI返回格式异常，请重试' });
+    }
+
+    try {
+      saveRecommendations(sessionId, data);
+      updateSession(sessionId, { stage: 'recommend' });
+    } catch (dbErr) {
+      console.error('DB save error:', dbErr.message);
+      // Still return the data even if DB save fails
+    }
 
     res.json(data);
   } catch (err) {
